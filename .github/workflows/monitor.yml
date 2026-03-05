@@ -1,0 +1,30 @@
+name: Monitor de Vagas de IA
+
+on:
+  schedule:
+    # Isso manda o GitHub rodar o código a cada 1 hora
+    - cron: '0 * * * *'
+  workflow_dispatch: # Permite que você rode manualmente pelo site se quiser
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixando o código do projeto
+        uses: actions/checkout@v3
+
+      - name: Instalando o Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Instalando as bibliotecas
+        run: |
+          pip install -r requirements.txt
+
+      - name: Executando o Olheiro
+        env:
+          # Aqui ele vai buscar suas senhas de forma segura
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python olheiro.py
