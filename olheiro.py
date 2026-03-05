@@ -60,19 +60,31 @@ def buscar_vagas_filtradas():
             
             if eh_remoto or eh_rj:
                 if filtro_ml_inteligente(titulo):
+                    # Lista de palavras que tornam a vaga "especial" para voce
+                    palavras_premium = ["generative", "llm", "deep learning", "neural", "especialista"]
+                    eh_vaga_premium = any(p in titulo.lower() for p in palavras_premium)
+
+                    if eh_vaga_premium:
+                        cabecalho_vaga = "ESTA EH A BOA! Vaga de peso encontrada para o futuro Engenheiro de IA"
+                    else:
+                        cabecalho_vaga = "Nova Vaga Encontrada"
+
                     mensagem = (
-                        f"Nova Vaga Encontrada!\n\n"
+                        f"{cabecalho_vaga}\n\n"
                         f"Cargo: {titulo}\n"
                         f"Empresa: {empresa}\n"
                         f"Local: {local}\n"
                         f"Link: {link}"
                     )
+                    
                     enviar_mensagem_telegram(mensagem)
                     print(f"Alerta enviado: {titulo}")
                 else:
                     print(f"DEBUG: Titulo ignorado pela IA: {titulo}")
+                    enviar_mensagem_telegram(aviso)
             else:
                 print(f"DEBUG: Local ignorado: {local}")
+                enviar_mensagem_telegram(aviso)
 
     except Exception as e:
         print(f"Ocorreu um erro na busca: {e}")
