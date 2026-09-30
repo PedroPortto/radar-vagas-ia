@@ -42,7 +42,8 @@ Habilidades principais:
 
 O candidato busca:
 - Vagas de Analista de Seguranca, SOC Analyst, Blue Team, Infraestrutura de Seguranca
-- Preferencialmente remoto ou Rio de Janeiro
+- APENAS vagas remotas (home office, remote work) ou presenciais no Rio de Janeiro
+- Vagas em outros estados (SP, MG, DF, etc.) presenciais devem receber nota maxima 3, independente da area
 - Pode ser junior ou pleno
 - Quer crescer para red team/pentest no futuro, entao vagas que combinem as duas areas tambem sao bem-vindas
 
@@ -129,7 +130,7 @@ def buscar_vagas():
     for i, vaga in enumerate(todas_vagas):
         nota = notas.get(i+1, 0)
         print(f"[{nota}/10] {vaga['titulo']} | {vaga['empresa']}")
-        if nota >= 7:
+        if nota >= 9:
             mensagem = (
                 f"Nova Vaga - Nota {nota}/10\n\n"
                 f"Cargo: {vaga['titulo']}\n"
