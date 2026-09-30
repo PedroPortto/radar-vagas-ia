@@ -13,36 +13,41 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-def avaliar_vaga_gemini(titulo, empresa, local):
-    prompt = f"""
-Você é um recrutador sênior especialista em segurança da informação e TI.
-Avalie esta vaga para um analista de SOC júnior/pleno de 23 anos, 
-focado em segurança defensiva, que busca evoluir na carreira.
+def avaliar_vagas_gemini(vagas):
+    linhas = []
+    for i, v in enumerate(vagas):
+        linhas.append(f"{i+1}. {v['titulo']} | {v['empresa']} | {v['local']}")
+    
+    lista_texto = "\n".join(linhas)
+    
+    prompt = f"""Avalie as vagas abaixo para um Analista de SOC junior/pleno, 23 anos, foco em seguranca defensiva, baseado no Rio de Janeiro. Ele busca vagas remotas ou no RJ.
+Responda APENAS com uma linha por vaga no formato: NUMERO|NOTA
+A nota vai de 0 a 10. Sem texto adicional, sem explicacao.
 
-Vaga:
-- Cargo: {titulo}
-- Empresa: {empresa}
-- Local: {local}
+{lista_texto}"""
 
-Dê uma nota de 0 a 10 para o quanto essa vaga é relevante para esse perfil.
-Responda APENAS com o número inteiro, sem texto adicional.
-"""
     for tentativa in range(2):
         try:
             response = client.models.generate_content(
-                model="gemini-3.5-flash.lite",
+                model="gemini-2.0-flash-lite",
                 contents=prompt
             )
-            nota_texto = response.text.strip()
-            nota = int(''.join(filter(str.isdigit, nota_texto)))
-            return min(nota, 10)
+            resultado = {}
+            for linha in response.text.strip().split("\n"):
+                linha = linha.strip()
+                if "|" in linha:
+                    partes = linha.split("|")
+                    numero = int(''.join(filter(str.isdigit, partes[0])))
+                    nota = int(''.join(filter(str.isdigit, partes[1])))
+                    resultado[numero] = min(nota, 10)
+            return resultado
         except Exception as e:
             if tentativa == 0:
                 print(f"Gemini erro, tentando de novo em 3s: {e}")
                 time.sleep(3)
             else:
-                print(f"Gemini falhou: {e}")
-                return 0
+                print(f"Gemini falhou definitivamente: {e}")
+                return {}
 
 def buscar_vagas():
     print("Iniciando busca de vagas no LinkedIn...")
@@ -57,54 +62,57 @@ def buscar_vagas():
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
 
-    vagas_enviadas = 0
+    todas_vagas = []
 
     for url in urls:
         try:
             resposta = requests.get(url, headers=cabecalho, verify=False, timeout=15)
             soup = BeautifulSoup(resposta.text, 'html.parser')
-            lista_vagas = soup.find_all('div', class_='base-search-card__info')
+            lista = soup.find_all('div', class_='base-search-card__info')
 
-            if not lista_vagas:
-                print(f"Nenhuma vaga encontrada em: {url}")
-                continue
-
-            for vaga in lista_vagas:
+            for vaga in lista:
                 try:
                     titulo = vaga.find('h3', class_='base-search-card__title').text.strip()
                     empresa = vaga.find('h4', class_='base-search-card__subtitle').text.strip()
                     local = vaga.find('span', class_='job-search-card__location').text.strip()
                     link_tag = vaga.find_previous('a', class_='base-card__full-link')
-                    link = link_tag['href'] if link_tag else "Link indisponível"
-
-                    print(f"Analisando: {titulo} | {empresa}")
-                    nota = avaliar_vaga_gemini(titulo, empresa, local)
-                    print(f"Nota Gemini: {nota}/10")
-
-                    if nota >= 7:
-                        mensagem = (
-                            f"Nova Vaga - Nota {nota}/10\n\n"
-                            f"Cargo: {titulo}\n"
-                            f"Empresa: {empresa}\n"
-                            f"Local: {local}\n"
-                            f"Link: {link}"
-                        )
-                        enviar_mensagem_telegram(mensagem)
-                        vagas_enviadas += 1
-                        time.sleep(2)
-
+                    link = link_tag['href'] if link_tag else "Link indisponivel"
+                    todas_vagas.append({"titulo": titulo, "empresa": empresa, "local": local, "link": link})
                 except Exception as e:
-                    print(f"Erro ao processar vaga: {e}")
-                    continue
+                    print(f"Erro ao extrair vaga: {e}")
 
         except Exception as e:
             print(f"Erro ao acessar URL: {e}")
-            continue
+
+    print(f"Total de vagas coletadas: {len(todas_vagas)}")
+
+    if not todas_vagas:
+        enviar_mensagem_telegram("Nenhuma vaga encontrada nesta rodada.")
+        return
+
+    notas = avaliar_vagas_gemini(todas_vagas)
+    print(f"Notas recebidas: {notas}")
+
+    vagas_enviadas = 0
+    for i, vaga in enumerate(todas_vagas):
+        nota = notas.get(i+1, 0)
+        print(f"[{nota}/10] {vaga['titulo']} | {vaga['empresa']}")
+        if nota >= 7:
+            mensagem = (
+                f"Nova Vaga - Nota {nota}/10\n\n"
+                f"Cargo: {vaga['titulo']}\n"
+                f"Empresa: {vaga['empresa']}\n"
+                f"Local: {vaga['local']}\n"
+                f"Link: {vaga['link']}"
+            )
+            enviar_mensagem_telegram(mensagem)
+            vagas_enviadas += 1
+            time.sleep(1)
 
     if vagas_enviadas == 0:
         enviar_mensagem_telegram("Nenhuma vaga relevante encontrada nesta rodada.")
 
-    print(f"Busca finalizada. {vagas_enviadas} vagas enviadas.")
+    print(f"Finalizado. {vagas_enviadas} vagas enviadas.")
 
 if __name__ == "__main__":
     buscar_vagas()
