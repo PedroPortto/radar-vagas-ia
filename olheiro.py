@@ -17,12 +17,44 @@ def avaliar_vagas_gemini(vagas):
     linhas = []
     for i, v in enumerate(vagas):
         linhas.append(f"{i+1}. {v['titulo']} | {v['empresa']} | {v['local']}")
-    
+
     lista_texto = "\n".join(linhas)
-    
-    prompt = f"""Avalie as vagas abaixo para um Analista de SOC junior/pleno, 23 anos, foco em seguranca defensiva, baseado no Rio de Janeiro. Ele busca vagas remotas ou no RJ.
+
+    prompt = f"""Voce e um recrutador senior especialista em seguranca da informacao.
+
+Avalie as vagas abaixo para o seguinte candidato:
+- Nome: Pedro Porto, 23 anos, Rio de Janeiro
+- Cargo atual: Analista de Infraestrutura e Seguranca da Informacao (SOC) no setor publico
+- Experiencia: 3 anos em TI, sendo 1 ano em SOC/Blue Team
+
+Habilidades principais:
+- SIEM: Wazuh, Security Onion, Graylog — uso diario em producao
+- Firewall: Palo Alto PA-850 (rulebase, VPN GlobalProtect, politicas por grupo AD)
+- Gestao de vulnerabilidades: CVEs, remediacao em RHEL 10 e Windows Server 2022
+- Active Directory, DNS, GPO, administracao de dominio
+- Automacao: n8n, Python, PowerShell, Bash
+- Monitoramento: Zabbix, Grafana, Proxmox
+- Dados: PostgreSQL, Power BI, DAX, SQL
+- Endpoint: Trend Micro Vision One, GLPI 11.0.5
+- Seguranca ofensiva basica: nmap, sqlmap, Burp, OWASP Top 10
+- Certificacao: CompTIA Security+ (concluida)
+- Estudante de Ciencia da Computacao (UVA, formatura 2026)
+
+O candidato busca:
+- Vagas de Analista de Seguranca, SOC Analyst, Blue Team, Infraestrutura de Seguranca
+- Preferencialmente remoto ou Rio de Janeiro
+- Pode ser junior ou pleno
+- Quer crescer para red team/pentest no futuro, entao vagas que combinem as duas areas tambem sao bem-vindas
+
+Criterios de avaliacao:
+- Nota 9-10: vaga perfeita — SOC, Blue Team, Seguranca da Informacao, combina com habilidades tecnicas
+- Nota 7-8: boa vaga — area de seguranca ou infraestrutura com componente de seguranca
+- Nota 4-6: vaga ok — TI geral, suporte senior, infraestrutura sem seguranca
+- Nota 1-3: pouco relevante — desenvolvimento, dados puros, area muito diferente
+- Nota 0: completamente fora do perfil
+
 Responda APENAS com uma linha por vaga no formato: NUMERO|NOTA
-A nota vai de 0 a 10. Sem texto adicional, sem explicacao.
+Sem texto adicional, sem explicacao, sem cabecalho.
 
 {lista_texto}"""
 
