@@ -1,102 +1,110 @@
+import os
+import time
 import requests
 from bs4 import BeautifulSoup
 import urllib3
-import os
-from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
+from google import genai
 from bot_telegram import enviar_mensagem_telegram
+from dotenv import load_dotenv
 
-# Desativa avisos de seguranca no terminal
+load_dotenv()
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# Perfil tecnologico baseado no seu objetivo de carreira
-PERFIL_IDEAL = (
-    "machine learning mlops python pytorch tensorflow keras deep learning "
-    "redes neurais neural networks artificial intelligence ia generative llm "
-    "vision nlp deploy engenheiro cientista data scientist ai engineer"
-)
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+client = genai.Client(api_key=GEMINI_API_KEY)
 
-def filtro_ml_inteligente(titulo_vaga):
-    """
-    Usa Processamento de Linguagem Natural para ver se a vaga combina com voce.
-    """
-    vectorizer = CountVectorizer()
-    vetores = vectorizer.fit_transform([PERFIL_IDEAL, titulo_vaga.lower()])
-    similaridade = cosine_similarity(vetores[0:1], vetores[1:2])[0][0]
-    return similaridade > 0.01 
+def avaliar_vaga_gemini(titulo, empresa, local):
+    prompt = f"""
+Você é um recrutador sênior especialista em segurança da informação e TI.
+Avalie esta vaga para um analista de SOC júnior/pleno de 23 anos, 
+focado em segurança defensiva, que busca evoluir na carreira.
 
-def buscar_vagas_filtradas():
-    print("Iniciando a ronda por vagas de IA postadas nos ultimos 90 minutos...")
-    
-    # URL configurada para: Machine Learning + Python + Remoto + Brasil
-    url = "https://br.linkedin.com/jobs/search?keywords=Machine%20Learning%20Python%20Remoto&location=Brasil&geoId=106057199&f_TPR=r5400"
-    
+Vaga:
+- Cargo: {titulo}
+- Empresa: {empresa}
+- Local: {local}
+
+Dê uma nota de 0 a 10 para o quanto essa vaga é relevante para esse perfil.
+Responda APENAS com o número inteiro, sem texto adicional.
+"""
+    for tentativa in range(2):
+        try:
+            response = client.models.generate_content(
+                model="gemini-2.0-flash",
+                contents=prompt
+            )
+            nota_texto = response.text.strip()
+            nota = int(''.join(filter(str.isdigit, nota_texto)))
+            return min(nota, 10)
+        except Exception as e:
+            if tentativa == 0:
+                print(f"Gemini erro, tentando de novo em 3s: {e}")
+                time.sleep(3)
+            else:
+                print(f"Gemini falhou: {e}")
+                return 0
+
+def buscar_vagas():
+    print("Iniciando busca de vagas no LinkedIn...")
+
+    urls = [
+        "https://br.linkedin.com/jobs/search?keywords=Analista+de+Seguranca&location=Brasil&geoId=106057199&f_TPR=r86400",
+        "https://br.linkedin.com/jobs/search?keywords=SOC+Analyst&location=Brasil&geoId=106057199&f_TPR=r86400",
+        "https://br.linkedin.com/jobs/search?keywords=Cybersecurity+Analista&location=Brasil&geoId=106057199&f_TPR=r86400",
+    ]
+
     cabecalho = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
-    
-    try:
-        resposta = requests.get(url, headers=cabecalho, verify=False, timeout=15)
-        site_organizado = BeautifulSoup(resposta.text, 'html.parser')
-        
-        lista_de_vagas = site_organizado.find_all('div', class_='base-search-card__info')
-        
-        print(f"DEBUG: Encontrei {len(lista_de_vagas)} vagas brutas no LinkedIn.")
-        
-        # Caso o bot nao encontre NADA no LinkedIn
-        if not lista_de_vagas:
-            mensagem_vazia = "Ronda finalizada: Nenhuma vaga nova foi postada nos ultimos 90 minutos."
-            print(mensagem_vazia)
-            enviar_mensagem_telegram(mensagem_vazia)
-            return
 
-        vagas_enviadas = 0
+    vagas_enviadas = 0
 
-        for vaga in lista_de_vagas:
-            titulo = vaga.find('h3', class_='base-search-card__title').text.strip()
-            empresa = vaga.find('h4', class_='base-search-card__subtitle').text.strip()
-            local = vaga.find('span', class_='job-search-card__location').text.strip()
-            
-            link_tag = vaga.find_previous('a', class_='base-card__full-link')
-            link = link_tag['href'] if link_tag else "Link indisponivel"
+    for url in urls:
+        try:
+            resposta = requests.get(url, headers=cabecalho, verify=False, timeout=15)
+            soup = BeautifulSoup(resposta.text, 'html.parser')
+            lista_vagas = soup.find_all('div', class_='base-search-card__info')
 
-            # Filtros de Localizacao (Rio de Janeiro ou Remoto)
-            eh_remoto = any(word in local.lower() for word in ["remoto", "remote", "brasil", "anywhere"])
-            eh_rj = "rio de janeiro" in local.lower() or "rj" in local.lower()
-            
-            if eh_remoto or eh_rj:
-                if filtro_ml_inteligente(titulo):
-                    # Destaque para vagas de alto nivel (Deep Learning / LLM)
-                    palavras_premium = ["generative", "llm", "deep learning", "neural", "especialista"]
-                    eh_vaga_premium = any(p in titulo.lower() for p in palavras_premium)
+            if not lista_vagas:
+                print(f"Nenhuma vaga encontrada em: {url}")
+                continue
 
-                    if eh_vaga_premium:
-                        cabecalho_alerta = "ESTA EH A BOA: Vaga de peso encontrada para o futuro Engenheiro de IA"
-                    else:
-                        cabecalho_alerta = "Nova Vaga Encontrada"
+            for vaga in lista_vagas:
+                try:
+                    titulo = vaga.find('h3', class_='base-search-card__title').text.strip()
+                    empresa = vaga.find('h4', class_='base-search-card__subtitle').text.strip()
+                    local = vaga.find('span', class_='job-search-card__location').text.strip()
+                    link_tag = vaga.find_previous('a', class_='base-card__full-link')
+                    link = link_tag['href'] if link_tag else "Link indisponível"
 
-                    mensagem = (
-                        f"{cabecalho_alerta}\n\n"
-                        f"Cargo: {titulo}\n"
-                        f"Empresa: {empresa}\n"
-                        f"Local: {local}\n"
-                        f"Link: {link}"
-                    )
-                    
-                    enviar_mensagem_telegram(mensagem)
-                    vagas_enviadas += 1
-                    print(f"Alerta enviado: {titulo}")
+                    print(f"Analisando: {titulo} | {empresa}")
+                    nota = avaliar_vaga_gemini(titulo, empresa, local)
+                    print(f"Nota Gemini: {nota}/10")
 
-        # Se ele achou vagas no LinkedIn, mas nenhuma passou nos seus filtros de IA/RJ/Remoto
-        if vagas_enviadas == 0:
-            aviso_filtros = "Ronda feita: Algumas vagas foram vistas, mas nenhuma batia com seu perfil de IA ou localizacao."
-            print(aviso_filtros)
-            enviar_mensagem_telegram(aviso_filtros)
+                    if nota >= 7:
+                        mensagem = (
+                            f"Nova Vaga - Nota {nota}/10\n\n"
+                            f"Cargo: {titulo}\n"
+                            f"Empresa: {empresa}\n"
+                            f"Local: {local}\n"
+                            f"Link: {link}"
+                        )
+                        enviar_mensagem_telegram(mensagem)
+                        vagas_enviadas += 1
+                        time.sleep(2)
 
-    except Exception as e:
-        erro_msg = f"Ocorreu um erro critico na busca: {e}"
-        print(erro_msg)
-        enviar_mensagem_telegram(erro_msg)
+                except Exception as e:
+                    print(f"Erro ao processar vaga: {e}")
+                    continue
+
+        except Exception as e:
+            print(f"Erro ao acessar URL: {e}")
+            continue
+
+    if vagas_enviadas == 0:
+        enviar_mensagem_telegram("Nenhuma vaga relevante encontrada nesta rodada.")
+
+    print(f"Busca finalizada. {vagas_enviadas} vagas enviadas.")
 
 if __name__ == "__main__":
-    buscar_vagas_filtradas()
+    buscar_vagas()
